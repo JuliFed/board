@@ -1,0 +1,50 @@
+{% extends "layout.html" %}
+{% block title %}Detail Board{% endblock %}
+{% block body %}
+<div class="container">
+    <div class="row">
+        <div class="col-md-8">
+          <div class="page-header">
+              <h2> {{ board_name }}</h2>
+              <p class="pull-right">{{ dt }}</p>
+              <p class="pull-right">{{ creator }}</p>
+              <h2>Add comment</h2>
+              <form action="" method=post>
+                    {% if error %}
+                      <p class=error><strong>Error:</strong> {{ error }}
+                    {% endif %}
+                    <p>
+                  <div class="form-group">
+                    <label for="creator">Your name:</label>
+                    <input type="text" class="form-control" id="creator" name="creator"  placeholder="Enter your name:" required>
+                  </div>
+                  <div class="form-group">
+                    <label for="comment">Your comment:</label>
+                      <textarea class="form-control" id="comment" name="comment" placeholder="Your comment:" required></textarea>
+                  </div>
+                  <button type="submit" class="btn btn-primary">Create</button>
+                </form>
+
+
+              <h2><small class="pull-right">{{ count_comm }}</small> Comments </h2>
+          </div>
+           <div class="comments-list">
+               {% for comment in comments %}
+
+               <div class="media">
+                   <p class="pull"><small> {{ comment['dt'] }}</small></p>
+                    <div class="media-body">
+                      <h4 class="media-heading">{{ comment['comm_creator'] }}</h4>
+                      {{ comment['comment_data'] }}
+                    </div>
+                  </div>
+                {% endfor %}
+           </div>
+        </div>
+    </div>
+
+
+
+    </div>
+</div>
+{% endblock %}
