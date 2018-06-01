@@ -1,13 +1,16 @@
 import os
 import redis
-from urllib.parse import urlparse
 from werkzeug.wrappers import Request, Response
 from werkzeug.routing import Map, Rule
 from werkzeug.exceptions import HTTPException, NotFound
 from werkzeug.wsgi import SharedDataMiddleware
 from werkzeug.utils import redirect
 from jinja2 import Environment, FileSystemLoader
+from datetime import datetime
 
+
+def is_valid_data(creator, board_name):
+    return True
 
 def base36_encode(number):
     assert number >= 0, 'positive integer required'
@@ -20,19 +23,14 @@ def base36_encode(number):
         return ''.join(reversed(base36))
 
 
-def is_valid_data(creator, board_name):
-    return True
-
-
 class Board(object):
     def __init__(self, config):
-        self.redis = redis.Redis(config['redis_host'], config['redis_port'])
+        self.redis = redis.Redis(config['redis_host'], config['redis_port'], decode_responses=True)
         template_path = os.path.join(os.path.dirname(__file__), 'templates')
         self.jinja_env = Environment(loader=FileSystemLoader(template_path),
                                      autoescape=True)
         self.url_map = Map([
-            Rule('/', endpoint='boards'),
-            Rule('/add', endpoint='save_new_board'),
+            Rule('/', endpoint='new_boards'),
             Rule('/<board_id>', endpoint='board_details'),
             Rule('/<board_id>+', endpoint='add_comment_to_board')
         ])
@@ -57,32 +55,47 @@ class Board(object):
     def __call__(self, environ, start_response):
         return self.wsgi_app(environ, start_response)
 
-    def on_save_new_board(self, request):
+    def on_new_boards(self, request):
         error = None
         if request.method == 'POST':
             creator = request.form['creator']
             board_name = request.form['board_name']
             if not is_valid_data(creator, board_name):
-                error = 'Please enter a valid URL'
+                error = 'Please enter a valid data'
             else:
                 board_id = self.insert_new_desk(creator, board_name)
-                return redirect('/%s+' % board_id)
-        return self.render_template('boards.html', error=error)
-
-    def on_boards(self, request):
-        boards = self.redis.keys('board:')
+                return redirect('/%s' % board_id, error=error)
+                
+        boards = self.redis.keys('board:*')
         boards_list = []
         for board in boards:
             board_name = self.redis.get(board)
-            creator = self.redis.get('creator:'+board)
-            boards_list.append({'name': board_name, "creator": creator})
-        return self.render_template('boards.html', boards_list=boards_list)
+            creator = self.redis.get('creator:' + board)
+            board_id = board.split(':')[1]
+            boards_list.append({'id': board_id, 'name': board_name, "creator": creator})
+        return self.render_template('boards.html', boards_list=boards_list, error=error)
+    
+    def on_board_details(self, request, board_id):
+        print(board_id)
+        board_name = self.redis.get('board:' + board_id)
+        creator = self.redis.get('creator:board:' + board_id)
+        if board_name is None:
+            raise NotFound()
+        print(board_name)
+        comments =
+        return self.render_template('boards.html',
+                                    board_name=board_name,
+                                    creator=creator,
+                                    comments=comments)
 
     def insert_new_desk(self, creator, board_name):
-        desk_num = self.redis.incr('last-desk-id')
-        self.redis.set('board:' + desk_num, board_name)
-        self.redis.set('creator:board:' + desk_num, creator)
-        return desk_num
+        board_id = str(self.redis.incr('last-desk-id'))
+        
+        self.redis.set('board:' + board_id, board_name)
+        self.redis.set('creator:board:' + board_id, creator)
+        self.redis.set('creation_date:board:' + board_id, datetime.now())
+        
+        return board_id
 
 
 def create_app(redis_host='localhost', redis_port=6379, with_static=True):
